@@ -39,11 +39,14 @@ class ShellRunner {
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var statusMenuItem: NSMenuItem!
+    private var lastUpdatedMenuItem: NSMenuItem!
     private var uptimeMenuItem: NSMenuItem!
     private var ipMenuItem: NSMenuItem!
     private var startMenuItem: NSMenuItem!
     private var hibernateMenuItem: NSMenuItem!
     private var refreshTimer: Timer?
+    private var lastUpdatedTimer: Timer?
+    private var lastUpdatedTime: Date?
     private var hasShownUptimeWarning = false
     private var pendingAction = false       // true after start/hibernate pressed
     private var pendingPollCount = 0        // polls remaining at fast interval
@@ -69,6 +72,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         buildMenu()
         refreshStatus()
+
+        // Update "Updated X ago" label every 60 seconds
+        lastUpdatedTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            self?.updateLastUpdatedLabel()
+        }
     }
 
     private func scheduleTimer(interval: TimeInterval) {
@@ -106,6 +114,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         scheduleTimer(interval: pendingInterval)
     }
 
+    private func updateLastUpdatedLabel() {
+        guard let time = lastUpdatedTime else { return }
+        let elapsed = Int(Date().timeIntervalSince(time))
+        let text: String
+        if elapsed < 60 {
+            text = "Updated: just now"
+        } else if elapsed < 3600 {
+            let mins = elapsed / 60
+            text = "Updated: \(mins)m ago"
+        } else {
+            let hours = elapsed / 3600
+            let mins = (elapsed % 3600) / 60
+            text = "Updated: \(hours)h \(mins)m ago"
+        }
+        lastUpdatedMenuItem.title = text
+    }
+
     private func buildMenu() {
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -113,6 +138,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusMenuItem = NSMenuItem(title: "Status: checking…", action: nil, keyEquivalent: "")
         statusMenuItem.isEnabled = false
         menu.addItem(statusMenuItem)
+
+        lastUpdatedMenuItem = NSMenuItem(title: "Updated: …", action: nil, keyEquivalent: "")
+        lastUpdatedMenuItem.isEnabled = false
+        menu.addItem(lastUpdatedMenuItem)
 
         uptimeMenuItem = NSMenuItem(title: "Uptime: …", action: nil, keyEquivalent: "")
         uptimeMenuItem.isEnabled = false
@@ -166,6 +195,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let uptimeLine = lines.count > 1 ? lines[1] : nil
                 self.updateUptime(status: status, uptimeLine: uptimeLine)
                 self.updatePollingInterval(status: status)
+                self.lastUpdatedTime = Date()
+                self.updateLastUpdatedLabel()
             } else {
                 self.statusMenuItem.title = "Status: ⚠️ error"
                 self.uptimeMenuItem.isHidden = true
