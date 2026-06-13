@@ -45,6 +45,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var hibernateMenuItem: NSMenuItem!
     private var refreshTimer: Timer?
     private var hasShownUptimeWarning = false
+    private var pendingAction = false       // true after start/hibernate pressed
+    private var pendingPollCount = 0        // polls remaining at fast interval
+    private var lastKnownStatus = ""
+
+    // Polling intervals
+    private let runningInterval: TimeInterval = 30 * 60   // 30 min
+    private let deallocatedInterval: TimeInterval = 3 * 3600 // 3 hours
+    private let pendingInterval: TimeInterval = 30         // 30 sec
+    private let maxPendingPolls = 20                       // stop fast polling after ~10 min
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
@@ -60,11 +69,41 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         buildMenu()
         refreshStatus()
+    }
 
-        // Auto-refresh status every 60 seconds
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+    private func scheduleTimer(interval: TimeInterval) {
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.refreshStatus()
         }
+    }
+
+    private func updatePollingInterval(status: String) {
+        let lowerStatus = status.lowercased()
+        let isRunning = lowerStatus.contains("running")
+
+        if pendingAction {
+            let statusChanged = lastKnownStatus != status && !status.contains("checking")
+            pendingPollCount += 1
+
+            if statusChanged || pendingPollCount >= maxPendingPolls {
+                pendingAction = false
+                pendingPollCount = 0
+                scheduleTimer(interval: isRunning ? runningInterval : deallocatedInterval)
+            }
+        } else {
+            scheduleTimer(interval: isRunning ? runningInterval : deallocatedInterval)
+        }
+
+        if !status.contains("checking") {
+            lastKnownStatus = status
+        }
+    }
+
+    private func startPendingPolling() {
+        pendingAction = true
+        pendingPollCount = 0
+        scheduleTimer(interval: pendingInterval)
     }
 
     private func buildMenu() {
@@ -126,6 +165,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 // Parse uptime from second line if present (e.g., "Uptime: 3h 15m")
                 let uptimeLine = lines.count > 1 ? lines[1] : nil
                 self.updateUptime(status: status, uptimeLine: uptimeLine)
+                self.updatePollingInterval(status: status)
             } else {
                 self.statusMenuItem.title = "Status: ⚠️ error"
                 self.uptimeMenuItem.isHidden = true
@@ -165,6 +205,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 self.showNotification(title: "DevBox Start Failed", body: output)
             }
+            self.startPendingPolling()
             self.refreshStatus()
         }
     }
@@ -180,6 +221,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 self.showNotification(title: "DevBox Hibernate Failed", body: output)
             }
+            self.startPendingPolling()
             self.refreshStatus()
         }
     }
