@@ -26,6 +26,15 @@ swiftc \
     -o "$EXECUTABLE" \
     "$SCRIPT_DIR/Sources/main.swift"
 
-echo "✅ Built successfully: $APP_BUNDLE"
-echo ""
-echo "To install: cp -r \"$APP_BUNDLE\" /Applications/"
+echo "✅ Built successfully"
+
+if [[ "${1:-}" == "--install" ]]; then
+    echo "Installing…"
+    rm -rf "/Applications/DevBox Manager.app"
+    cp -r "$APP_BUNDLE" "/Applications/DevBox Manager.app"
+    rm -rf "$APP_BUNDLE"
+    echo "✅ Installed to /Applications/DevBox Manager.app"
+else
+    echo ""
+    echo "To install: ./build.sh --install"
+fi
