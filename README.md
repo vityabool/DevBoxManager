@@ -18,6 +18,32 @@ A lightweight native macOS menu bar app for managing an Azure DevBox VM.
 - Xcode Command Line Tools (`xcode-select --install`)
 - Python 3 with Pillow (`pip3 install Pillow`) — for icon generation
 - Azure CLI (`az`) logged in (`az login`)
+- An Azure VM with **hibernation enabled** (see below)
+
+## Azure VM Hibernation Requirements
+
+The VM must support and have hibernation enabled. Key requirements:
+
+**Supported VM sizes** (up to 64 GB RAM):
+- Dasv5 / Dadsv5 / Dsv5 / Ddsv5 series
+- Easv5 / Eadsv5 / Esv5 / Edsv5 series
+- NVv4 / NVadsA10v5 series (GPU, preview)
+
+**Requirements:**
+- Hibernation must be **enabled at VM creation** (cannot be added to existing VMs without reconfiguration)
+- OS disk must be large enough to hold the full RAM contents
+- Windows page file cannot be on the temp disk
+
+**Not supported with:**
+- Ephemeral OS disks
+- Shared disks
+- Availability Sets
+- Spot VMs
+- Azure Backup
+
+**Billing:** No compute charges while hibernated; storage/IPs still billed.
+
+For full details, see the [Azure VM Hibernation documentation](https://learn.microsoft.com/en-us/azure/virtual-machines/hibernate-resume).
 
 ## Setup
 
